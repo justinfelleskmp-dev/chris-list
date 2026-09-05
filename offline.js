@@ -2,6 +2,7 @@ const originalFetch=window.fetch.bind(window);
 window.fetch=async function(url,options={}) {
  if(!String(url).startsWith('/api/'))return originalFetch(url,options);
  const key='chris-list-v1';let d=JSON.parse(localStorage.getItem(key)||'null')||{watches:[{id:'plotter',description:'Graphtec CE6000-60'},{id:'enclosure',description:'72 inch display cabinet'}],listings:[],last_scan:{ran_at:'No verified scan',summary:'Search links open marketplaces. Saved records are snapshots, not confirmed live inventory.'}};
+ for(const idea of donorIdeas)if(!d.watches.some(w=>w.id===idea.id))d.watches.push({...idea});
  const b=JSON.parse(options.body||'{}');
  if(url==='/api/watch')d.watches.push({id:crypto.randomUUID(),description:b.description});
  if(url==='/api/listing')d.listings.push({...b,id:crypto.randomUUID(),status:'saved'});
