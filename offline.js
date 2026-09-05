@@ -9,4 +9,4 @@ window.fetch=async function(url,options={}) {
  if(url==='/api/listing/update'||url==='/api/listing/status'){let x=d.listings.find(x=>x.id===b.id);if(x)Object.assign(x,b);}
  localStorage.setItem(key,JSON.stringify(d));return new Response(JSON.stringify(url==='/api/state'?d:{ok:true}),{headers:{'Content-Type':'application/json'}});
 };
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js');
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(console.error);
