@@ -1,3 +1,4 @@
+from test_listing_review import approved_message
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -27,7 +28,7 @@ class FeatureTests(unittest.TestCase):
  def test_no_automatic_duplicate_sends(self):
   with tempfile.TemporaryDirectory() as directory,patch.object(message_queue,'PATH',Path(directory)/'messages.json'):
    lookup=lambda _: {'id':'a','title':'Cameo 3','url':'https://www.facebook.com/marketplace/item/123','platform':'Facebook Marketplace'}
-   payload=[{'id':'a','text':'Hello, is this available?'}]
+   payload=[approved_message(lookup('a'),'Hello, is this available?')]
    first=message_queue.enqueue(payload,lookup)['messages'][0]
    message_queue.update(first['id'],'sent')
    again=message_queue.enqueue(payload,lookup)['messages'];self.assertEqual(len(again),1);self.assertEqual(again[0]['status'],'sent')
@@ -44,7 +45,7 @@ class SendRepairTests(unittest.TestCase):
  def test_offerup_old_blocked_job_can_be_resubmitted_without_duplicates(self):
   with tempfile.TemporaryDirectory() as directory,patch.object(message_queue,'PATH',Path(directory)/'messages.json'):
    lookup=lambda _: {'id':'a','title':'Display case','url':'https://offerup.com/item/detail/abc','platform':'OfferUp'}
-   payload=[{'id':'a','text':'Would you consider $50?'}]
+   payload=[approved_message(lookup('a'),'Would you consider $50?')]
    job=message_queue.enqueue(payload,lookup)['messages'][0];self.assertEqual(job['status'],'queued')
    message_queue.update(job['id'],'manual_send_required')
    result=message_queue.enqueue(payload,lookup)['messages'];self.assertEqual(len(result),1);self.assertEqual(result[0]['status'],'queued')

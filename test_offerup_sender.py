@@ -1,3 +1,4 @@
+from test_listing_review import approved_message
 """Delivery-state tests without contacting sellers or launching Chrome."""
 import tempfile
 import unittest
@@ -30,13 +31,13 @@ class OfferUpSenderTests(unittest.TestCase):
     def test_click_without_confirmation_is_held(self):
         self.assertEqual(self.run_send('clicked', 'false')[-1][1], 'delivery_unconfirmed')
 
-    def test_platform_confirmation_records_sent(self):
-        self.assertEqual(self.run_send('clicked')[-1][1], 'sent')
+    def test_page_wide_confirmation_is_not_a_delivery_receipt(self):
+        self.assertEqual(self.run_send('clicked')[-1][1], 'delivery_unconfirmed')
 
     def test_send_exception_is_held_and_resubmission_does_not_requeue(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(message_queue, 'PATH', Path(directory)/'messages.json'):
             lookup = lambda _: {'id': 'a', 'title': 'Display case', 'url': 'https://offerup.com/item/detail/test', 'platform': 'OfferUp'}
-            payload = [{'id': 'a', 'text': 'Approved text'}]
+            payload = [approved_message(lookup('a'), 'Approved text')]
             job = message_queue.enqueue(payload, lookup)['messages'][0]
             page = MagicMock()
             page.evaluate.side_effect = ['opened', 'false', 'filled', '1', RuntimeError('connection lost')]

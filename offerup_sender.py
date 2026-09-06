@@ -28,8 +28,8 @@ def send(job, update):
             if clicked!='clicked':
                 return update(job['id'],'delivery_unconfirmed','Send result unknown; check the OfferUp conversation before retrying.')
             time.sleep(3)
-            confirmed=page.evaluate("/message sent/i.test(document.body.innerText)")=='true'
-            update(job['id'],'sent' if confirmed else 'delivery_unconfirmed','OfferUp displayed Message sent' if confirmed else 'Send clicked; check the OfferUp conversation before retrying.')
+            # A toast anywhere on the page does not prove this message arrived.
+            update(job['id'],'delivery_unconfirmed','Send clicked; verify the exact message in the OfferUp conversation and record delivery before any retry.')
     except Exception as error:
         from scanner import read
         import message_queue

@@ -58,7 +58,8 @@ class Handler(BaseHTTPRequestHandler):
         path=up.urlparse(self.path).path
         if path=='/local/status':
             from alert_delivery import health
-            return self.respond({'alerts':health(RUNTIME),'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),'messages':read(RUNTIME/'messages.json',[])})
+            from message_queue import snapshot
+            return self.respond({'alerts':health(RUNTIME),'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),**snapshot()})
         if path=='/local/photos':
             try:
                 row=listing(up.parse_qs(up.urlparse(self.path).query).get('id',[''])[0])
@@ -90,6 +91,9 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path=='/local/message-preflight':
                 from message_queue import preflight
                 result=preflight([listing(key)['platform'] for key in data.get('ids',[])])
+            elif self.path=='/local/message-reconcile':
+                from message_queue import reconcile
+                result=reconcile(data)
             elif self.path=='/local/messages':
                 from message_queue import enqueue,preflight
                 messages=data.get('messages',[])
@@ -103,7 +107,8 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=='__main__':
     RUNTIME.mkdir(exist_ok=True)
+    server=ThreadingHTTPServer(('127.0.0.1',8766),Handler)
     from message_queue import worker
     threading.Thread(target=worker,daemon=True).start()
     print('Chris List local app: http://127.0.0.1:8766 — also available through the Mac LAN/Tailscale address',flush=True)
-    ThreadingHTTPServer(('127.0.0.1',8766),Handler).serve_forever()
+    server.serve_forever()
