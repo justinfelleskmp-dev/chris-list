@@ -56,7 +56,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.trusted(): return self.respond({'error':'Unrecognized host or origin'},403)
         path=up.urlparse(self.path).path
-        if path=='/local/status':return self.respond({'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),'messages':read(RUNTIME/'messages.json',[])})
+        if path=='/local/status':
+            from alert_delivery import health
+            return self.respond({'alerts':health(RUNTIME),'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),'messages':read(RUNTIME/'messages.json',[])})
         if path=='/local/photos':
             try:
                 row=listing(up.parse_qs(up.urlparse(self.path).query).get('id',[''])[0])

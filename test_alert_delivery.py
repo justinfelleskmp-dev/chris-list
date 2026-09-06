@@ -1,7 +1,9 @@
 import json
+import fcntl
 import os
 from pathlib import Path
 import stat
+import smtplib
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -30,15 +32,18 @@ class AlertDeliveryTests(unittest.TestCase):
             'priority': priority,
         }
 
-    def config(self, email=True, text=True):
+    def config(self, email=True, text=True, copies=None):
         value = {}
         if email is not None:
-            value['email'] = {
+            email_config = {
                 'enabled': email,
                 'transport': 'mail',
                 'sender': 'sender@example.test',
                 'recipient': 'recipient@example.test',
             }
+            if copies is not None:
+                email_config['copy_recipients'] = copies
+            value['email'] = email_config
         if text is not None:
             value['text'] = {
                 'enabled': text,
@@ -46,6 +51,19 @@ class AlertDeliveryTests(unittest.TestCase):
                 'service_id': 'iMessage-service',
             }
         (self.runtime / 'alert-config.json').write_text(json.dumps(value))
+
+    def smtp_config(self):
+        (self.runtime / 'alert-config.json').write_text(json.dumps({
+            'email': {
+                'enabled': True,
+                'transport': 'smtp',
+                'host': 'smtp.example.test',
+                'port': 2525,
+                'sender': 'sender@example.test',
+                'recipient': 'recipient@example.test',
+            },
+            'text': {'enabled': False, 'recipient': '+15550001111', 'service_id': 'iMessage-service'},
+        }))
 
     def read_json(self, name):
         return json.loads((self.runtime / name).read_text())
@@ -204,6 +222,187 @@ class AlertDeliveryTests(unittest.TestCase):
         channel = self.read_json('alert-outbox.json')['items']['mail-false']['channels']['email']
         self.assertEqual(channel['state'], 'failed')
         self.assertIn('queued for retry', status)
+
+    def test_copy_recipients_have_own_receipts_and_only_failed_copy_retries(self):
+        copies = ['copy-one@example.test', 'copy-two@example.test']
+        self.config(text=False, copies=copies)
+        item = self.row('copy-item')
+        calls = []
+
+        def submit(kind, settings, body):
+            calls.append((kind, settings['recipient']))
+            if settings['recipient'] == copies[0]:
+                raise RuntimeError('private copy failure')
+
+        with patch('alert_delivery.submit', side_effect=submit):
+            status = alert_delivery.notify(self.runtime, [item], lambda row: True)
+
+        destinations = alert_delivery.targets(self.read_json('alert-config.json'))
+        copy_keys = [key for key in destinations if key.startswith('email-copy-')]
+        self.assertEqual([recipient for _, recipient in calls], [
+            'recipient@example.test', copies[0], copies[1]])
+        self.assertEqual(len(copy_keys), 2)
+        channels = self.read_json('alert-outbox.json')['items']['copy-item']['channels']
+        self.assertEqual(channels['email']['state'], 'submitted')
+        self.assertEqual(channels[copy_keys[0]]['state'], 'failed')
+        self.assertEqual(channels[copy_keys[1]]['state'], 'submitted')
+        self.assertNotIn('private copy failure', status)
+        self.assertNotIn(copies[0], status)
+
+        with patch('alert_delivery.submit') as retry:
+            alert_delivery.notify(self.runtime, [item], lambda row: True)
+
+        retry.assert_called_once()
+        self.assertEqual(retry.call_args.args[0], 'email')
+        self.assertEqual(retry.call_args.args[1]['recipient'], copies[0])
+        channels = self.read_json('alert-outbox.json')['items']['copy-item']['channels']
+        self.assertEqual(channels['email']['state'], 'submitted')
+        self.assertEqual(channels[copy_keys[0]]['state'], 'submitted')
+        self.assertEqual(channels[copy_keys[1]]['state'], 'submitted')
+
+    def test_adding_copy_recipient_does_not_send_old_submitted_items(self):
+        item = self.row('old-item')
+        self.config(text=False)
+        with patch('alert_delivery.submit') as first:
+            alert_delivery.notify(self.runtime, [item], lambda row: True)
+        first.assert_called_once()
+
+        copies = ['new-copy@example.test']
+        self.config(text=False, copies=copies)
+        with patch('alert_delivery.submit') as added:
+            alert_delivery.notify(self.runtime, [], lambda row: True)
+        self.assertFalse(added.called)
+        copy_key = next(key for key in self.read_json('alert-outbox.json')['items']['old-item']['channels']
+                        if key.startswith('email-copy-'))
+        self.assertEqual(
+            self.read_json('alert-outbox.json')['items']['old-item']['channels'][copy_key]['state'],
+            'waived')
+
+    def test_removed_copy_is_waived_and_readding_it_does_not_replay_backlog(self):
+        copy = 'temporary-copy@example.test'
+        item = self.row('copy-removed')
+        self.config(text=False, copies=[copy])
+
+        def fail_copy(kind, settings, body):
+            if settings['recipient'] == copy:
+                raise RuntimeError('copy unavailable')
+
+        with patch('alert_delivery.submit', side_effect=fail_copy):
+            alert_delivery.notify(self.runtime, [item], lambda row: True)
+        copy_key = next(key for key in self.read_json('alert-outbox.json')['items']['copy-removed']['channels']
+                        if key.startswith('email-copy-'))
+        self.assertEqual(
+            self.read_json('alert-outbox.json')['items']['copy-removed']['channels'][copy_key]['state'],
+            'failed')
+
+        self.config(text=False)
+        with patch('alert_delivery.submit') as removed:
+            alert_delivery.notify(self.runtime, [], lambda row: True)
+        self.assertFalse(removed.called)
+        self.assertEqual(
+            self.read_json('alert-outbox.json')['items']['copy-removed']['channels'][copy_key]['state'],
+            'waived')
+
+        self.config(text=False, copies=[copy])
+        with patch('alert_delivery.submit') as restored:
+            alert_delivery.notify(self.runtime, [], lambda row: True)
+        self.assertFalse(restored.called)
+        self.assertEqual(
+            self.read_json('alert-outbox.json')['items']['copy-removed']['channels'][copy_key]['state'],
+            'waived')
+
+    def test_inbox_journal_survives_invalid_outbox_or_config_and_recovers(self):
+        for invalid in ('outbox', 'config'):
+            with self.subTest(invalid=invalid):
+                self.config(text=False)
+                item = self.row(f'journal-{invalid}')
+                if invalid == 'outbox':
+                    (self.runtime / 'alert-outbox.json').write_text(json.dumps({'version': 99, 'items': {}}))
+                else:
+                    (self.runtime / 'alert-config.json').write_text('{not-json')
+
+                with patch('alert_delivery.submit') as blocked:
+                    status = alert_delivery.notify(self.runtime, [item], lambda row: True)
+                self.assertFalse(blocked.called)
+                self.assertIn('attention', status)
+                self.assertTrue(list(self.runtime.glob('alert-inbox-*.json')))
+
+                self.config(text=False)
+                if invalid == 'outbox':
+                    # Recovery includes replacing the damaged state file; the
+                    # journal must then be consumed and delivered exactly once.
+                    (self.runtime / 'alert-outbox.json').write_text(
+                        json.dumps({'version': 1, 'items': {}}))
+                with patch('alert_delivery.submit') as recovered:
+                    alert_delivery.notify(self.runtime, [], lambda row: True)
+                recovered.assert_called_once()
+                state = self.read_json('alert-outbox.json')
+                self.assertEqual(state['items'][item['id']]['channels']['email']['state'], 'submitted')
+                self.assertFalse(list(self.runtime.glob('alert-inbox-*.json')))
+
+                for path in self.runtime.iterdir():
+                    path.unlink()
+
+    def test_process_lock_refuses_delivery_and_leaves_journal_for_later(self):
+        self.config(text=False)
+        item = self.row('locked')
+        lock_path = self.runtime / 'alert.lock'
+        with lock_path.open('w') as held_lock:
+            fcntl.flock(held_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with patch('alert_delivery.submit') as submit:
+                status = alert_delivery.notify(self.runtime, [item], lambda row: True)
+            self.assertEqual(status, 'Alerts already being processed')
+            self.assertFalse(submit.called)
+            self.assertTrue(list(self.runtime.glob('alert-inbox-*.json')))
+            fcntl.flock(held_lock, fcntl.LOCK_UN)
+
+        with patch('alert_delivery.submit') as recovered:
+            alert_delivery.notify(self.runtime, [], lambda row: True)
+        recovered.assert_called_once()
+        self.assertEqual(
+            self.read_json('alert-outbox.json')['items']['locked']['channels']['email']['state'],
+            'submitted')
+
+    def test_smtp_send_disconnect_is_uncertain_and_not_retried(self):
+        self.smtp_config()
+        item = self.row('smtp-disconnect')
+        smtp = SimpleNamespace(
+            starttls=lambda: None,
+            send_message=lambda message: (_ for _ in ()).throw(
+                smtplib.SMTPServerDisconnected('connection lost')),
+            close=lambda: None,
+        )
+
+        with patch('alert_delivery.smtplib.SMTP', return_value=smtp) as factory:
+            status = alert_delivery.notify(self.runtime, [item], lambda row: True)
+        factory.assert_called_once_with('smtp.example.test', 2525, timeout=30)
+        channel = self.read_json('alert-outbox.json')['items']['smtp-disconnect']['channels']['email']
+        self.assertEqual(channel['state'], 'held')
+        self.assertIn('held for review', status)
+
+        with patch('alert_delivery.smtplib.SMTP') as retry:
+            alert_delivery.notify(self.runtime, [item], lambda row: True)
+        self.assertFalse(retry.called)
+
+    def test_smtp_close_failure_after_acceptance_does_not_retry(self):
+        self.smtp_config()
+        item = self.row('smtp-close')
+
+        def close_failure():
+            raise OSError('QUIT failed after DATA')
+
+        smtp = SimpleNamespace(
+            starttls=lambda: None,
+            send_message=lambda message: {},
+            close=close_failure,
+        )
+
+        with patch('alert_delivery.smtplib.SMTP', return_value=smtp):
+            status = alert_delivery.notify(self.runtime, [item], lambda row: True)
+
+        channel = self.read_json('alert-outbox.json')['items']['smtp-close']['channels']['email']
+        self.assertEqual(channel['state'], 'submitted')
+        self.assertNotIn('queued for retry', status)
 
     def test_digest_is_one_bounded_submission_per_channel_and_uses_argv_data(self):
         self.config()

@@ -214,48 +214,53 @@ def notify(new, results):
 
 
 def main():
-    parser = argparse.ArgumentParser(); parser.add_argument('--publish', action='store_true'); parser.add_argument('--limit', type=int); parser.add_argument('--platform', choices=list(PLATFORMS))
+    parser = argparse.ArgumentParser(); parser.add_argument('--publish', action='store_true'); parser.add_argument('--alerts-only', action='store_true', help='Retry queued alerts without scanning or publishing'); parser.add_argument('--limit', type=int); parser.add_argument('--platform', choices=list(PLATFORMS))
     args = parser.parse_args(); RUNTIME.mkdir(exist_ok=True)
+    if args.alerts_only:
+        print(notify([], {})); return
     import fcntl
-    lock = (RUNTIME/'lock').open('w')
-    try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
-    except BlockingIOError: print('Scan already running'); return
-    config = read(ROOT/'scanner-config.json', {})
-    watches = config.get('watches', []) + read(RUNTIME/'watches.json', [])
-    # Repository-owner search requests bridge the phone UI to this local job.
-    # Requests from other issue authors are ignored, and no issue text is executed.
-    intake_error = ''
-    try:
-        issues = json.loads(fetch('https://api.github.com/repos/justinfelleskmp-dev/chris-list/issues?state=open&per_page=100'))
-        for issue in issues:
-            if issue.get('user',{}).get('login') != 'justinfelleskmp-dev': continue
-            if not issue.get('title','').startswith('Chris List search: '): continue
-            query = issue['title'].removeprefix('Chris List search: ').strip()[:150]
-            if query: watches.append({'id':'request-'+str(issue['number']),'query':query,'priority':'primary'})
-    except Exception as error: intake_error = 'Phone search requests could not be read: '+str(error)
-    if not watches: raise SystemExit('No scanner watches configured')
-    watches = sorted(watches, key=lambda w: w.get('priority') == 'secondary')
-    if args.limit: watches = watches[:args.limit]
-    old = read(FEED, {'listings': []}); discovered = []; statuses = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        jobs = {pool.submit(scan_source, source, watches): source for source in ([args.platform] if args.platform else PLATFORMS)}
-        for job in concurrent.futures.as_completed(jobs):
-            rows, status = job.result(); discovered.extend(rows); statuses.append(status)
-            print(status['platform'], status['status'], len(rows), flush=True)
-    if args.platform:
-        statuses += [s for s in old.get('platforms', []) if s['platform'] != args.platform]
-    listings, new = merge([x for x in old.get('listings', []) if relevant(x)], discovered)
-    results = {'ran_at': now(), 'platforms': statuses, 'listings': listings, 'new_count': len(new),
-               'summary': f'{len(new)} newly discovered matches. {sum(x["status"]=="ok" for x in statuses)}/10 sources fully scanned.'}
-    results['intake_status'] = intake_error or 'Repository-owner search requests checked (first 100 open issues)'
-    results['alert_status'] = notify(new, results)
-    atomic(FEED, results)
-    print(results['summary']); print(results['alert_status'])
-    if args.publish:
-        subprocess.run(['git','add','scan-results.json'], cwd=ROOT, check=True)
-        if subprocess.run(['git','diff','--cached','--quiet','--','scan-results.json'],cwd=ROOT).returncode:
-            subprocess.run(['git','commit','-m','Update marketplace scan snapshot','--','scan-results.json'],cwd=ROOT,check=True)
-            subprocess.run(['git','push'],cwd=ROOT,check=True)
-
+    with (RUNTIME/'lock').open('w') as lock:
+        try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError: print('Scan already running'); return
+        config = read(ROOT/'scanner-config.json', {})
+        watches = config.get('watches', []) + read(RUNTIME/'watches.json', [])
+        # Repository-owner search requests bridge the phone UI to this local job.
+        # Requests from other issue authors are ignored, and no issue text is executed.
+        intake_error = ''
+        try:
+            issues = json.loads(fetch('https://api.github.com/repos/justinfelleskmp-dev/chris-list/issues?state=open&per_page=100'))
+            for issue in issues:
+                if issue.get('user',{}).get('login') != 'justinfelleskmp-dev': continue
+                if not issue.get('title','').startswith('Chris List search: '): continue
+                query = issue['title'].removeprefix('Chris List search: ').strip()[:150]
+                if query: watches.append({'id':'request-'+str(issue['number']),'query':query,'priority':'primary'})
+        except Exception as error: intake_error = 'Phone search requests could not be read: '+str(error)
+        if not watches: raise SystemExit('No scanner watches configured')
+        watches = sorted(watches, key=lambda w: w.get('priority') == 'secondary')
+        if args.limit: watches = watches[:args.limit]
+        old = read(FEED, {'listings': []}); discovered = []; statuses = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            jobs = {pool.submit(scan_source, source, watches): source for source in ([args.platform] if args.platform else PLATFORMS)}
+            for job in concurrent.futures.as_completed(jobs):
+                try: rows, status = job.result()
+                except Exception:
+                    rows = []; status = {'platform':jobs[job], 'checked_at':now(), 'status':'blocked',
+                        'records':0, 'detail':'Source scan failed; other sources continued'}
+                discovered.extend(rows); statuses.append(status)
+                print(status['platform'], status['status'], len(rows), flush=True)
+        if args.platform:
+            statuses += [s for s in old.get('platforms', []) if s['platform'] != args.platform]
+        listings, new = merge([x for x in old.get('listings', []) if relevant(x)], discovered)
+        results = {'ran_at': now(), 'platforms': statuses, 'listings': listings, 'new_count': len(new),
+                   'summary': f'{len(new)} newly discovered matches. {sum(x["status"]=="ok" for x in statuses)}/10 sources fully scanned.'}
+        results['intake_status'] = intake_error or 'Repository-owner search requests checked (first 100 open issues)'
+        results['alert_status'] = notify(new, results)
+        atomic(FEED, results)
+        print(results['summary']); print(results['alert_status'])
+        if args.publish:
+            subprocess.run(['git','add','scan-results.json'], cwd=ROOT, check=True)
+            if subprocess.run(['git','diff','--cached','--quiet','--','scan-results.json'],cwd=ROOT).returncode:
+                subprocess.run(['git','commit','-m','Update marketplace scan snapshot','--','scan-results.json'],cwd=ROOT,check=True)
+                subprocess.run(['git','push'],cwd=ROOT,check=True)
 
 if __name__ == '__main__': main()

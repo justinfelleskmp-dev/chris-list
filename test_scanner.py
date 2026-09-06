@@ -22,4 +22,19 @@ class ScannerTests(unittest.TestCase):
   b={'id':'a','last_seen':'later','priority':'secondary','watch_ids':['donor']}
   rows,new=merge([a],[b]);self.assertEqual(rows[0]['priority'],'primary');self.assertEqual(new,[])
 
+class ScanFailureTests(unittest.TestCase):
+ def test_source_crash_does_not_abort_alert_processing(self):
+  import json, tempfile, sys
+  from pathlib import Path
+  from unittest.mock import patch
+  import scanner
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);(root/'scanner-config.json').write_text(json.dumps({'watches':[{'query':'case'}]}))
+   with patch.object(scanner,'ROOT',root),patch.object(scanner,'RUNTIME',root/'.scanner'),patch.object(scanner,'FEED',root/'scan-results.json'),patch.object(sys,'argv',['scanner.py']),patch.object(scanner,'fetch',return_value='[]'),patch.object(scanner,'scan_source',side_effect=RuntimeError('source crashed')),patch.object(scanner,'notify',return_value='queued') as notify,patch('builtins.print'):
+    scanner.main()
+   result=json.loads((root/'scan-results.json').read_text())
+   self.assertEqual(len(result['platforms']),10)
+   self.assertTrue(all(x['status']=='blocked' for x in result['platforms']))
+   notify.assert_called_once()
+
 if __name__=='__main__':unittest.main()

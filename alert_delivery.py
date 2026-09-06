@@ -7,6 +7,7 @@ Outbox submitting/held records require human review before any retry.
 """
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -50,7 +51,8 @@ def clean(value, limit):
 def digest(rows, channel):
     rows = sorted(rows, key=lambda r: (r.get('priority') == 'secondary', str(r.get('id'))))
     limit = 10 if channel == 'email' else 2
-    lines = [f'Chris List: {len(rows)} new matches', DASHBOARD]
+    heading = 'Chris List: alert reliability test' if rows and all(r.get('is_test') is True for r in rows) else f'Chris List: {len(rows)} new matches'
+    lines = [heading, DASHBOARD]
     for row in rows[:limit]:
         lines.append(clean(row.get('title'), 140 if channel == 'email' else 70) + ' — ' + clean(row.get('price'), 30))
         if channel == 'email':
@@ -93,7 +95,8 @@ def applescript(script, args):
         raise UncertainSubmission('App response timed out; check delivery before retrying') from e
     if result.returncode:
         error = result.stderr.strip()[:1000]
-        if '-1712' in error or result.returncode < 0:
+        rejected = any(code in error for code in ('-1743','-1719','-1728','-600','-10814','-1708','-2740')) or 'Mail did not accept the message' in error
+        if not rejected or result.returncode < 0:
             raise UncertainSubmission(error)
         raise RuntimeError(error)
     if result.stdout.strip() != 'submitted':
@@ -128,7 +131,8 @@ def submit(channel, config, body):
             raise UncertainSubmission('SMTP disconnected during submission') from e
     finally:
         # QUIT failures after DATA acceptance must not turn success into a retry.
-        smtp.close()
+        try: smtp.close()
+        except Exception: pass
 
 
 def load_config(runtime):
@@ -144,14 +148,55 @@ def load_config(runtime):
     return config
 
 
+def targets(config):
+    result = {c: (c, config.get(c, {})) for c in CHANNELS}
+    email = config.get('email', {})
+    copies = email.get('copy_recipients', [])
+    if not isinstance(copies, list) or len(copies) > 10:
+        raise ValueError('Email copy recipients must be a list of at most ten addresses')
+    seen = {str(email.get('recipient', '')).strip().lower()}
+    for address in copies:
+        if not isinstance(address, str) or not address.strip() or any(x in address for x in '\r\n,;') or '@' not in address:
+            raise ValueError('Invalid email copy recipient')
+        address = address.strip()
+        if address.lower() in seen: continue
+        seen.add(address.lower())
+        key = 'email-copy-' + hashlib.sha256(address.lower().encode()).hexdigest()[:16]
+        result[key] = ('email', dict(email, recipient=address))
+    return result
+
+
+def health(runtime):
+    """Non-sensitive operational status for the private app."""
+    runtime = Path(runtime)
+    try:
+        state = read(runtime/'alert-outbox.json', {'items':{}})
+        current = targets(load_config(runtime))
+        channels = []
+        for key, (kind, settings) in current.items():
+            receipts = [item['channels'][key] for item in state['items'].values() if key in item['channels']]
+            counts = {name:sum(r['state']==name for r in receipts) for name in ('pending','failed','held','submitting','submitted')}
+            last = max((r.get('at','') for r in receipts if r['state']=='submitted'), default=None)
+            channels.append({'name': 'Email copy' if key.startswith('email-copy-') else kind.capitalize(),
+                'configured':configured(kind, settings), 'enabled':settings.get('enabled') is not False,
+                'counts':counts, 'last_submission':last})
+        return {'channels':channels, 'needs_attention':any(c['counts']['held'] or c['counts']['failed'] or (c['enabled'] and not c['configured']) for c in channels)}
+    except Exception:
+        return {'channels':[], 'needs_attention':True, 'error':'Private alert records or configuration need attention'}
+
+
 def notify(runtime, new, relevant):
     runtime = Path(runtime); runtime.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(runtime, 0o700)
+    # Journal before attempting the lock: another delivery process may be busy,
+    # but the scanner must still retain these discoveries before its feed advances.
+    if new:
+        atomic(runtime/('alert-inbox-'+uuid.uuid4().hex+'.json'), new)
     lockfd = os.open(runtime/'alert.lock', os.O_CREAT|os.O_RDWR, 0o600)
     with os.fdopen(lockfd, 'w') as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError: return 'Alerts already being processed'
-        try: return _notify(runtime, new, relevant)
+        try: return _notify(runtime, [], relevant)
         except Exception as e:
             # The public feed must never expose raw errors or private settings.
             atomic(runtime/'alert-error.json', {'at':stamp(), 'error':str(e)[:1000]})
@@ -164,11 +209,17 @@ def _notify(runtime, new, relevant):
     if state.get('version') != 1 or not isinstance(state.get('items'), dict):
         raise ValueError('Unsupported alert outbox')
     items = state['items']
+    known_channels = set(CHANNELS) | {c for item in items.values() for c in item['channels']}
     legacy = read(runtime/'pending.json', {})
-    for row in [*legacy.values(), *new]:
+    inboxes = sorted(runtime.glob('alert-inbox-*.json'))
+    incoming = list(new)
+    for inbox in inboxes: incoming.extend(read(inbox, []))
+    new_ids = set()
+    for row in [*legacy.values(), *incoming]:
         key = str(row['id'])
         if key not in items and relevant(row):
-            items[key] = {'listing':row, 'channels':{c:{'state':'pending'} for c in CHANNELS}}
+            new_ids.add(key)
+            items[key] = {'listing':row, 'channels':{c:{'state':'pending'} for c in known_channels}}
     for item in items.values():
         for receipt in item['channels'].values():
             if receipt['state'] == 'submitting':
@@ -180,26 +231,38 @@ def _notify(runtime, new, relevant):
     atomic(path, state)
     if legacy: atomic(runtime/'pending.json', {})
     config = load_config(runtime)
+    destinations = targets(config)
+    # Removed copy destinations are explicitly waived, so restoring a copy
+    # doesn't unexpectedly replay records discovered while it was absent.
+    previous = {key for item in items.values() for key in item['channels']}
+    for key in previous - destinations.keys(): destinations[key] = ('email', {'enabled':False})
+    for item_id, item in items.items():
+        for key in destinations:
+            if key not in item['channels']:
+                item['channels'][key] = {'state':'pending' if item_id in new_ids else 'waived',
+                    'reason':'Destination added after this item was queued'}
+    atomic(path, state)
+    for inbox in inboxes: inbox.unlink()
     summary = []
-    for channel in CHANNELS:
-        settings = config.get(channel, {})
+    for channel, (kind, settings) in destinations.items():
+        label = 'email copy' if channel.startswith('email-copy-') else channel
         waiting = [item for item in items.values() if item['channels'][channel]['state'] in ('pending', 'failed')]
         held = sum(item['channels'][channel]['state'] == 'held' for item in items.values())
         if settings.get('enabled') is False:
             for item in waiting: item['channels'][channel] = {'state':'waived', 'at':stamp(), 'reason':'Channel disabled'}
             atomic(path, state)
-            summary.append(channel+': disabled' + (f'; {held} held for review' if held else '')); continue
+            summary.append(label+': disabled' + (f'; {held} held for review' if held else '')); continue
         if not waiting:
-            summary.append(channel+(': held for review' if held else ': no pending alerts')); continue
-        if not configured(channel, settings):
-            summary.append(channel+': waiting for configuration'); continue
-        body = digest([item['listing'] for item in waiting], channel)
+            summary.append(label+(': held for review' if held else ': no pending alerts')); continue
+        if not configured(kind, settings):
+            summary.append(label+': waiting for configuration'); continue
+        body = digest([item['listing'] for item in waiting], kind)
         batch = uuid.uuid4().hex
         atomic(runtime/('latest-'+channel+'-alert.json'), {'batch':batch, 'body':body, 'at':stamp()})
         for item in waiting: item['channels'][channel] = {'state':'submitting', 'at':stamp(), 'batch':batch}
         atomic(path, state)
         try:
-            submit(channel, settings, body)
+            submit(kind, settings, body)
         except UncertainSubmission as e:
             outcome = 'held'; detail = str(e)[:1000]
         except Exception as e:
@@ -209,6 +272,6 @@ def _notify(runtime, new, relevant):
         for item in waiting:
             item['channels'][channel].update(state=outcome, at=stamp(), detail=detail)
         atomic(path, state)
-        summary.append(channel+': '+{'submitted':'submitted to app/server', 'failed':'failed; queued for retry', 'held':'held for review'}[outcome])
+        summary.append(label+': '+{'submitted':'submitted to app/server', 'failed':'failed; queued for retry', 'held':'held for review'}[outcome])
         if held: summary[-1] += f'; {held} earlier items held for review'
     return '; '.join(summary)

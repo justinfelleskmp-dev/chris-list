@@ -50,3 +50,13 @@ Email selected ad links now uses only checked records, with a recipient and edit
 
 ### Connection checks
 The Mac app distinguishes a closed Chrome window from a disabled Chrome Apple Events setting or a denied macOS Automation permission. These checks concern seller messaging; viewing listings and automatic Mail/Messages alerts use separate paths. A connection check does not prove a marketplace is signed in or a seller received anything.
+
+
+### Alert reliability and email copies
+Set `email.copy_recipients` to a private list of additional email addresses. Each receives a separate digest with its own durable receipt; a copy failure cannot replay the primary email or text. Adding a copy starts with future discoveries, without replaying the old backlog. Removing it skips items discovered while absent.
+
+Discoveries are journaled before outbox/config parsing and before acquiring the delivery lock. Interrupted processing and configuration failures retain that inbox until it is durably merged. Unknown app failures are held for review; known rejection failures can retry. `python3 scanner.py --alerts-only` processes this queue without rescanning or publishing. On this Mac, `com.chrislist.alerts` runs this command every 15 minutes while awake, separately from the 9am/1pm/5pm scanner. The private app's **Automatic email & text alerts** panel shows queue/review counts and last submissions. Receipt timestamps mean application/server acceptance, not verified inbox delivery.
+
+A failed Git update no longer prevents the installed scanner from running. An unexpected source error is isolated so the remaining source results can still produce alerts. Git publishing can still fail independently of local delivery and reports failure in the schedule log.
+
+**Open private app to review & send** transfers selected drafts to the Mac-hosted app; it works from a phone connected to Tailscale while the Mac is awake. Opening that link does not send seller messages.
