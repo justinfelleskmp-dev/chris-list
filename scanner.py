@@ -226,6 +226,17 @@ def main():
     except BlockingIOError: print('Scan already running'); return
     config = read(ROOT/'scanner-config.json', {})
     watches = config.get('watches', [])
+    # Repository-owner search requests bridge the phone UI to this local job.
+    # Requests from other issue authors are ignored, and no issue text is executed.
+    intake_error = ''
+    try:
+        issues = json.loads(fetch('https://api.github.com/repos/justinfelleskmp-dev/chris-list/issues?state=open&per_page=100'))
+        for issue in issues:
+            if issue.get('user',{}).get('login') != 'justinfelleskmp-dev': continue
+            if not issue.get('title','').startswith('Chris List search: '): continue
+            query = issue['title'].removeprefix('Chris List search: ').strip()[:150]
+            if query: watches.append({'id':'request-'+str(issue['number']),'query':query,'priority':'primary'})
+    except Exception as error: intake_error = 'Phone search requests could not be read: '+str(error)
     if not watches: raise SystemExit('No scanner watches configured')
     watches = sorted(watches, key=lambda w: w.get('priority') == 'secondary')
     if args.limit: watches = watches[:args.limit]
@@ -238,6 +249,7 @@ def main():
     listings, new = merge([x for x in old.get('listings', []) if relevant(x)], discovered)
     results = {'ran_at': now(), 'platforms': statuses, 'listings': listings, 'new_count': len(new),
                'summary': f'{len(new)} newly discovered matches. {sum(x["status"]=="ok" for x in statuses)}/10 sources fully scanned.'}
+    results['intake_status'] = intake_error or 'Repository-owner search requests checked (first 100 open issues)'
     results['alert_status'] = notify(new, results)
     atomic(FEED, results)
     print(results['summary']); print(results['alert_status'])
