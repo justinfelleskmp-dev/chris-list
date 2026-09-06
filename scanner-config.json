@@ -1,0 +1,374 @@
+{
+  "watches": [
+    {
+      "id": "primary-enclosure",
+      "query": "display case",
+      "priority": "primary"
+    },
+    {
+      "id": "primary-plotter",
+      "query": "vinyl cutter",
+      "priority": "primary"
+    },
+    {
+      "id": "primary-cabinet",
+      "query": "display cabinet",
+      "priority": "primary"
+    },
+    {
+      "id": "primary-kiosk",
+      "query": "kiosk",
+      "priority": "primary"
+    },
+    {
+      "id": "donor-1",
+      "query": "photo booths",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-2",
+      "query": "Claw machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-3",
+      "query": "vending machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-4",
+      "query": "Fortune teller",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-5",
+      "query": "tanning beds and stand-up tanning booths",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-6",
+      "query": "aquariums and aquarium stands",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-7",
+      "query": "Jewelry",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-8",
+      "query": "casino machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-9",
+      "query": "Arcade cabinets",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-10",
+      "query": "Driving simulator",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-11",
+      "query": "industrial control consoles",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-12",
+      "query": "Telephone booths and acoustic office pods",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-13",
+      "query": "refrigerator/freezer display cases",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-14",
+      "query": "Bakery",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-15",
+      "query": "medical equipment",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-16",
+      "query": "Laboratory equipment and fume hoods",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-17",
+      "query": "Broadcast",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-18",
+      "query": "copy machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-19",
+      "query": "ATMs",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-20",
+      "query": "Parking payment kiosks",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-21",
+      "query": "Movie theater ticket kiosks",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-22",
+      "query": "Airport check-in kiosks",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-23",
+      "query": "Retail self-checkout machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-24",
+      "query": "information kiosks",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-25",
+      "query": "Restaurant hostess stands",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-26",
+      "query": "sewing",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-27",
+      "query": "Letterpresses",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-28",
+      "query": "Drafting tables and architect desks",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-29",
+      "query": "projection televisions",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-30",
+      "query": "Vintage console stereos",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-31",
+      "query": "Church confessionals",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-32",
+      "query": "Voting booths",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-33",
+      "query": "Security guard booths",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-34",
+      "query": "Trade-show exhibits",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-35",
+      "query": "Museum exhibit leftovers",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-36",
+      "query": "Theme park",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-37",
+      "query": "Retail store closing fixtures",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-38",
+      "query": "Movie-set and television-set liquidation",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-39",
+      "query": "Office privacy pods",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-40",
+      "query": "Saunas",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-41",
+      "query": "Shower enclosures",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-42",
+      "query": "elevator interiors",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-43",
+      "query": "Walk-in freezer panels",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-44",
+      "query": "Portable darkrooms",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-45",
+      "query": "Planetarium domes",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-46",
+      "query": "Trade-school training simulators",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-47",
+      "query": "Industrial robot safety cages",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-48",
+      "query": "Warehouse picking stations",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-49",
+      "query": "Server racks and telecom cabinets",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-50",
+      "query": "library card catalogs",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-51",
+      "query": "Coin-operated kiddie rides",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-52",
+      "query": "Coin-operated massage chairs",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-53",
+      "query": "Laundromat washers/dryers",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-54",
+      "query": "ovens",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-55",
+      "query": "Walk-up ice machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-56",
+      "query": "Postal drop boxes",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-57",
+      "query": "lockers",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-58",
+      "query": "Library book-return machines",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-59",
+      "query": "Baggage conveyors",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-60",
+      "query": "Dry-cleaning garment conveyors",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-61",
+      "query": "Rotating retail displays",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-62",
+      "query": "Mannequin display windows",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-63",
+      "query": "Shoe-shine chairs",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-64",
+      "query": "optometrist/phoropter stations",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-65",
+      "query": "Photo enlargers",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-66",
+      "query": "Library microfilm cabinets",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-67",
+      "query": "Map cabinets",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-68",
+      "query": "mail-sorting cabinets",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-69",
+      "query": "cinema projection equipment",
+      "priority": "secondary"
+    },
+    {
+      "id": "donor-70",
+      "query": "Animatronic store displays",
+      "priority": "secondary"
+    }
+  ]
+}

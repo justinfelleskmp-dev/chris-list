@@ -1,0 +1,37 @@
+name: Scan marketplaces
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: marketplace-scan
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scan public sources
+        run: python3 scanner.py
+        env:
+          CHRIS_SMTP_HOST: ${{ secrets.CHRIS_SMTP_HOST }}
+          CHRIS_SMTP_USER: ${{ secrets.CHRIS_SMTP_USER }}
+          CHRIS_SMTP_PASSWORD: ${{ secrets.CHRIS_SMTP_PASSWORD }}
+          CHRIS_MAIL_FROM: ${{ secrets.CHRIS_MAIL_FROM }}
+          CHRIS_MAIL_TO: ${{ secrets.CHRIS_MAIL_TO }}
+      - name: Publish snapshot
+        run: |
+          git config user.name 'Chris List scanner'
+          git config user.email 'scanner@users.noreply.github.com'
+          git add scan-results.json
+          git diff --cached --quiet || git commit -m 'Update marketplace scan snapshot'
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alert-digest
+          path: .scanner/latest-alert.*
+          if-no-files-found: ignore

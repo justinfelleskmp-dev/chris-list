@@ -1,0 +1,5 @@
+.scanner/
+__pycache__/
+*.pyc
+.env
+local-schedule.plist
