@@ -21,6 +21,8 @@ import urllib.parse as up
 import urllib.request as ur
 from email.message import EmailMessage
 
+from machine_rules import eligible, annotate
+
 ROOT = Path(__file__).resolve().parent
 FEED = ROOT / 'scan-results.json'
 RUNTIME = ROOT / '.scanner'
@@ -107,7 +109,7 @@ def relevant(row):
         return {w.rstrip('s') for w in re.findall(r'[a-z0-9]+', text.lower()) if w not in stop and len(w)>2}
     query = tokens(row.get('matched_query',''))
     title = tokens(row.get('title',''))
-    return bool(query) and len(query & title) >= max(1, (len(query)*2+2)//3)
+    return eligible(row) and bool(query) and len(query & title) >= max(1, (len(query)*2+2)//3)
 
 
 def parse_page(source, url, body, watch, timestamp):
@@ -145,6 +147,8 @@ def parse_page(source, url, body, watch, timestamp):
             'watch_ids': [watch['id']], 'matched_query': watch['query'], 'last_seen': timestamp,
             'availability': 'Shown in search; seller confirmation needed', 'status': 'saved',
             'delivery': 'Pickup listing; confirm address' if source == 'Craigslist' else 'Pickup / shipping unverified',
+            'images': [i for i in (images if isinstance(images,list) else [image]) if isinstance(i,str) and i.startswith('http')],
+            'requirements': watch.get('description',''),
             'note': clean(product.get('description'))[:1500] or 'Found on the platform search page. Dimensions and working condition need verification.'}
     return list(results.values())
 
@@ -157,7 +161,20 @@ def fetch(url):
         return raw.decode('utf-8', 'replace')
 
 
+def matches_constraints(row, watch):
+    text=(row.get('title','')+' '+row.get('note','')).lower()
+    if any(str(t).lower() not in text for t in watch.get('include',[])):return False
+    if any(str(t).lower() in text for t in watch.get('exclude',[])):return False
+    if watch.get('price_max') is not None:
+        price=re.search(r'[\d,]+(?:\.\d+)?',row.get('price',''))
+        if not price or float(price[0].replace(',',''))>float(watch['price_max']):return False
+    return True
+
+
 def scan_source(source, watches):
+    if source == "Facebook Marketplace":
+        from facebook_scanner import scan
+        return scan(watches)
     stamp = now(); rows = []; errors = []; attempted = 0
     for w in watches:
         attempted += 1
@@ -169,7 +186,7 @@ def scan_source(source, watches):
             if not found and not re.search(r'no results|no listings|0 results|nothing found', body, re.I):
                 errors.append('No readable listing records; login, script rendering, or parser support required')
                 break
-            rows.extend([x for x in found if relevant(x)][:30])
+            rows.extend([x for x in found if relevant(x) and matches_constraints(x,w)][:30])
         except Exception as error:
             errors.append(str(error)); break
         time.sleep(0.5)
@@ -179,8 +196,10 @@ def scan_source(source, watches):
 
 
 def merge(previous, discovered):
-    existing = {x['id']: x for x in previous}; new = []
+    existing = {x['id']: annotate(x) for x in previous if eligible(x)}; new = []
     for x in discovered:
+        if not eligible(x): continue
+        annotate(x)
         old = existing.get(x['id'])
         if old:
             x['first_seen'] = old.get('first_seen', x['last_seen'])
@@ -218,14 +237,14 @@ def notify(new, results):
 
 
 def main():
-    parser = argparse.ArgumentParser(); parser.add_argument('--publish', action='store_true'); parser.add_argument('--limit', type=int)
+    parser = argparse.ArgumentParser(); parser.add_argument('--publish', action='store_true'); parser.add_argument('--limit', type=int); parser.add_argument('--platform', choices=list(PLATFORMS))
     args = parser.parse_args(); RUNTIME.mkdir(exist_ok=True)
     import fcntl
     lock = (RUNTIME/'lock').open('w')
     try: fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
     except BlockingIOError: print('Scan already running'); return
     config = read(ROOT/'scanner-config.json', {})
-    watches = config.get('watches', [])
+    watches = config.get('watches', []) + read(RUNTIME/'watches.json', [])
     # Repository-owner search requests bridge the phone UI to this local job.
     # Requests from other issue authors are ignored, and no issue text is executed.
     intake_error = ''
@@ -242,10 +261,12 @@ def main():
     if args.limit: watches = watches[:args.limit]
     old = read(FEED, {'listings': []}); discovered = []; statuses = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        jobs = {pool.submit(scan_source, source, watches): source for source in PLATFORMS}
+        jobs = {pool.submit(scan_source, source, watches): source for source in ([args.platform] if args.platform else PLATFORMS)}
         for job in concurrent.futures.as_completed(jobs):
             rows, status = job.result(); discovered.extend(rows); statuses.append(status)
             print(status['platform'], status['status'], len(rows), flush=True)
+    if args.platform:
+        statuses += [s for s in old.get('platforms', []) if s['platform'] != args.platform]
     listings, new = merge([x for x in old.get('listings', []) if relevant(x)], discovered)
     results = {'ran_at': now(), 'platforms': statuses, 'listings': listings, 'new_count': len(new),
                'summary': f'{len(new)} newly discovered matches. {sum(x["status"]=="ok" for x in statuses)}/10 sources fully scanned.'}

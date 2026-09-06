@@ -1,13 +1,23 @@
 {
   "watches": [
     {
-      "id": "primary-enclosure",
-      "query": "display case",
+      "id": "primary-plotter-0",
+      "query": "Cameo 3",
       "priority": "primary"
     },
     {
-      "id": "primary-plotter",
-      "query": "vinyl cutter",
+      "id": "primary-plotter-1",
+      "query": "Cameo 5",
+      "priority": "primary"
+    },
+    {
+      "id": "primary-plotter-2",
+      "query": "Cricut Explore Air 2",
+      "priority": "primary"
+    },
+    {
+      "id": "primary-enclosure",
+      "query": "display case",
       "priority": "primary"
     },
     {
