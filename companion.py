@@ -77,6 +77,11 @@ class Handler(BaseHTTPRequestHandler):
             data=json.loads(self.rfile.read(length))
             if self.path=='/local/assistant':result=assistant(data.get('messages',[]))
             elif self.path=='/local/watch':result=save_watch(data)
+            elif self.path=='/local/chrome-check':
+                from chrome_bridge import ChromeTab
+                with ChromeTab() as tab:
+                    tab.goto('https://www.facebook.com/marketplace/anaheim/')
+                    result=json.loads(tab.evaluate("JSON.stringify({title:document.title,login_required:!!document.querySelector('input[type=password]'),url:location.href})"))
             elif self.path=='/local/scan':
                 subprocess.Popen(['/opt/homebrew/bin/python3',str(ROOT/'scanner.py'),'--publish'],cwd=ROOT,stdout=(RUNTIME/'manual-scan.log').open('a'),stderr=subprocess.STDOUT)
                 result={'status':'Scan requested; results update when the Mac finishes. An already-running scan is kept.'}
