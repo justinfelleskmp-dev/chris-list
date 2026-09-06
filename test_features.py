@@ -34,3 +34,23 @@ class FeatureTests(unittest.TestCase):
  def test_old_incompatible_feed_removed(self):
   rows,_=merge([{'id':'a','title':'Roland CAMM-1'}],[]);self.assertEqual(rows,[])
 if __name__=='__main__':unittest.main()
+
+class SendRepairTests(unittest.TestCase):
+ def test_chrome_block_preflight(self):
+  with patch('chrome_bridge.apple',side_effect=RuntimeError('disabled')):
+   check=message_queue.preflight(['OfferUp']);self.assertFalse(check['ready']);self.assertIn('Not sent',check['detail'])
+ def test_unsupported_platform_preflight(self):
+  check=message_queue.preflight(['Mercari']);self.assertFalse(check['ready']);self.assertIn('Mercari',check['detail'])
+ def test_offerup_old_blocked_job_can_be_resubmitted_without_duplicates(self):
+  with tempfile.TemporaryDirectory() as directory,patch.object(message_queue,'PATH',Path(directory)/'messages.json'):
+   lookup=lambda _: {'id':'a','title':'Display case','url':'https://offerup.com/item/detail/abc','platform':'OfferUp'}
+   payload=[{'id':'a','text':'Would you consider $50?'}]
+   job=message_queue.enqueue(payload,lookup)['messages'][0];self.assertEqual(job['status'],'queued')
+   message_queue.update(job['id'],'manual_send_required')
+   result=message_queue.enqueue(payload,lookup)['messages'];self.assertEqual(len(result),1);self.assertEqual(result[0]['status'],'queued')
+   message_queue.update(job['id'],'delivery_unconfirmed')
+   self.assertEqual(message_queue.enqueue(payload,lookup)['messages'][0]['status'],'delivery_unconfirmed')
+ def test_unsupported_batch_not_silently_queued(self):
+  lookup=lambda _: {'id':'a','title':'Case','url':'https://mercari.com/us/item/a','platform':'Mercari'}
+  with self.assertRaisesRegex(ValueError,'Not sent'):
+   message_queue.enqueue([{'id':'a','text':'Hello'}],lookup)

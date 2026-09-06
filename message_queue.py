@@ -5,21 +5,35 @@ import time
 from scanner import RUNTIME, read, atomic, now
 LOCK=threading.Lock()
 PATH=RUNTIME/'messages.json'
+SUPPORTED={'Facebook Marketplace','OfferUp'}
+
+def preflight(platforms):
+    unsupported=sorted(set(platforms)-SUPPORTED)
+    if unsupported:return {'ready':False,'detail':'Not sent. Automatic messaging is not connected for '+', '.join(unsupported)+'. Remove those ads from the batch.'}
+    from chrome_bridge import apple
+    try:
+        apple('tell application "Google Chrome" to execute active tab of front window javascript "document.title"')
+    except Exception:
+        return {'ready':False,'detail':'Not sent. Chrome connection is blocked. On the Mac mini, enable Chrome > View > Developer > Allow JavaScript from Apple Events. Also sign in to '+', '.join(sorted(set(platforms)))+' in that Chrome browser.'}
+    return {'ready':True,'detail':'Chrome is connected. Each seller message still requires a signed-in platform session; delivery will be checked separately.'}
+
 def enqueue(messages,lookup):
     if not messages or len(messages)>30:raise ValueError('Choose 1–30 ads per batch')
     additions=[]
     for entry in messages:
-        row=lookup(entry['id']);text=str(entry.get('text','')).strip()
+        row=lookup(entry['id'])
+        if row['platform'] not in SUPPORTED:raise ValueError('Not sent: '+row['platform']+' messaging is not connected')
+        text=str(entry.get('text','')).strip()
         if not text or len(text)>2000:raise ValueError('Messages must contain 1–2000 characters')
         key=hashlib.sha256((row['url']+'\n'+text).encode()).hexdigest()[:24]
-        additions.append({'id':key,'listing_id':row['id'],'url':row['url'],'platform':row['platform'],'title':row['title'],'text':text,'status':'queued' if row['platform']=='Facebook Marketplace' else 'manual_send_required','updated_at':now()})
+        additions.append({'id':key,'listing_id':row['id'],'url':row['url'],'platform':row['platform'],'title':row['title'],'text':text,'status':'queued','updated_at':now()})
     with LOCK:
         jobs=read(PATH,[]);known={x['id'] for x in jobs}
         for x in additions:
             if x['id'] not in known:jobs.append(x)
             else:
                 old=next(j for j in jobs if j['id']==x['id'])
-                if old['status'] in ['needs_login','needs_connection','failed']:old.update(status=x['status'],detail='',updated_at=now())
+                if old['status'] in ['needs_login','needs_connection','failed','manual_send_required','needs_review']:old.update(status=x['status'],detail='',updated_at=now())
         atomic(PATH,jobs)
     return {'messages':[x for x in jobs if x['id'] in {a['id'] for a in additions}]}
 def update(key,status,detail=''):
@@ -58,5 +72,10 @@ def worker():
         if x['status']=='sending':update(x['id'],'delivery_unconfirmed','Interrupted send; verify in Facebook')
     while True:
         for job in read(PATH,[]):
-            if job['status']=='queued':send_facebook(job);time.sleep(5)
+            if job['status']=='queued':
+                if job['platform']=='OfferUp':
+                    from offerup_sender import send
+                    send(job,update)
+                else:send_facebook(job)
+                time.sleep(5)
         time.sleep(15)

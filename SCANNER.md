@@ -27,3 +27,9 @@ Select ads, open Message selected ads, choose free pickup / offer / tool questio
 Ad popups show all collected gallery images. The local app retrieves ad photos on opening: Facebook's exposed Product photo thumbnails, or Product JSON-LD images on other platforms. Recommendation images are excluded. Missing/incomplete galleries are labeled rather than advertised as complete; Facebook sometimes exposes thumbnails only. Photos require internet and remote image URLs may expire. Gallery metadata caches locally. Saved text and the local chat work without internet; marketplace scanning and sending require it.
 
 `companion.py` serves a static allowlist, checks Host/Origin on requests, and requires a same-origin custom header for mutations. Private queues, model chats, and browser sessions are not served as files or committed. The user requested no dashboard password, so the app is bound to loopback and exposed only through Tailscale Serve.
+
+
+### Messaging repair
+The failed six-ad batch was all OfferUp and was recorded as manual_send_required; no messages were sent. OfferUp now has an adapter for its documented Ask / New Message / Send website flow. This adapter has not been validated against a signed-in account: Chrome Apple Events remains disabled on this installation. Preflight now rejects blocked Chrome connections and unsupported platforms before queueing. The modal polls delivery for the submitted batch and displays plain-language failures. Re-submitting a previously blocked OfferUp draft is allowed, but sent/uncertain messages are not replayed. Chrome and OfferUp sign-in must be connected before live delivery can be verified.
+
+Email selected ad links now uses only checked records, with a recipient and editable preview. It clearly opens an external email draft (not a seller message). Oversized mailto links are prevented, with an .eml download fallback. No SMTP email sender has been connected.

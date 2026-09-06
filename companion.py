@@ -85,9 +85,15 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path=='/local/scan':
                 subprocess.Popen(['/opt/homebrew/bin/python3',str(ROOT/'scanner.py'),'--publish'],cwd=ROOT,stdout=(RUNTIME/'manual-scan.log').open('a'),stderr=subprocess.STDOUT)
                 result={'status':'Scan requested; results update when the Mac finishes. An already-running scan is kept.'}
+            elif self.path=='/local/message-preflight':
+                from message_queue import preflight
+                result=preflight([listing(key)['platform'] for key in data.get('ids',[])])
             elif self.path=='/local/messages':
-                from message_queue import enqueue
-                result=enqueue(data.get('messages',[]),listing)
+                from message_queue import enqueue,preflight
+                messages=data.get('messages',[])
+                check=preflight([listing(m['id'])['platform'] for m in messages])
+                if not check['ready']:return self.respond({'error':check['detail']},409)
+                result=enqueue(messages,listing)
             else:return self.respond({'error':'Not found'},404)
             self.respond(result)
         except Exception as e:self.respond({'error':str(e)},400)
