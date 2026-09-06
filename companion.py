@@ -98,4 +98,4 @@ if __name__=='__main__':
     from message_queue import worker
     threading.Thread(target=worker,daemon=True).start()
     print('Chris List local app: http://127.0.0.1:8766 — also available through the Mac LAN/Tailscale address',flush=True)
-    ThreadingHTTPServer(('0.0.0.0',8766),Handler).serve_forever()
+    ThreadingHTTPServer(('127.0.0.1',8766),Handler).serve_forever()
