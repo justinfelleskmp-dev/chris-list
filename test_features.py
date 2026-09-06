@@ -54,3 +54,10 @@ class SendRepairTests(unittest.TestCase):
   lookup=lambda _: {'id':'a','title':'Case','url':'https://mercari.com/us/item/a','platform':'Mercari'}
   with self.assertRaisesRegex(ValueError,'Not sent'):
    message_queue.enqueue([{'id':'a','text':'Hello'}],lookup)
+
+class ConnectionDiagnosisTests(unittest.TestCase):
+ def test_closed_window_is_not_permission_error(self):
+  with patch('chrome_bridge.apple',side_effect=RuntimeError('Invalid index. (-1719)')):
+   check=message_queue.preflight(['OfferUp'])
+   self.assertFalse(check['ready']); self.assertIn('Open a Chrome window',check['detail'])
+   self.assertNotIn('enable',check['detail']); self.assertNotIn('-1719',check['detail'])

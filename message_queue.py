@@ -10,11 +10,11 @@ SUPPORTED={'Facebook Marketplace','OfferUp'}
 def preflight(platforms):
     unsupported=sorted(set(platforms)-SUPPORTED)
     if unsupported:return {'ready':False,'detail':'Not sent. Automatic messaging is not connected for '+', '.join(unsupported)+'. Remove those ads from the batch.'}
-    from chrome_bridge import apple
+    from chrome_bridge import check_connection
     try:
-        apple('tell application "Google Chrome" to execute active tab of front window javascript "document.title"')
-    except Exception:
-        return {'ready':False,'detail':'Not sent. Chrome connection is blocked. On the Mac mini, enable Chrome > View > Developer > Allow JavaScript from Apple Events. Also sign in to '+', '.join(sorted(set(platforms)))+' in that Chrome browser.'}
+        check_connection()
+    except Exception as error:
+        return {'ready':False,'detail':'Not sent. '+str(error)}
     return {'ready':True,'detail':'Chrome is connected. Each seller message still requires a signed-in platform session; delivery will be checked separately.'}
 
 def enqueue(messages,lookup):

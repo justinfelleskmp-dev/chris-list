@@ -8,10 +8,26 @@ def apple(script,*args):
     if result.returncode:raise RuntimeError(result.stderr.strip()[:500])
     return result.stdout.strip()
 
+def check_connection():
+    try:
+        apple('tell application "Google Chrome" to execute active tab of front window javascript "document.title"')
+    except Exception as error:
+        detail = str(error)
+        if '-1719' in detail or 'Invalid index' in detail:
+            message = 'Open a Chrome window on the Mac, then check the connection again.'
+        elif 'JavaScript from Apple Events' in detail:
+            message = 'Chrome seller messaging needs its Allow JavaScript from Apple Events setting. Review that setting on the Mac before using automatic seller messaging.'
+        elif '-1743' in detail:
+            message = 'macOS has not allowed the local app to control Chrome. Review its Automation permission on the Mac before using automatic seller messaging.'
+        else:
+            message = 'Chrome could not be reached. Open Chrome on the Mac and check the connection again.'
+        raise RuntimeError(message) from error
+
+
 class ChromeTab:
     def __enter__(self):
         # Check the Chrome setting before opening any tab.
-        apple('tell application "Google Chrome" to execute active tab of front window javascript "document.title"')
+        check_connection()
         value=apple('''tell application "Google Chrome"
 set w to front window
 set t to make new tab at end of tabs of w with properties {URL:"about:blank"}
