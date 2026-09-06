@@ -4,6 +4,7 @@ import threading
 import time
 import json
 import os
+import re
 import fcntl
 from contextlib import contextmanager
 from scanner import RUNTIME, read, now
@@ -59,6 +60,22 @@ def snapshot():
     try:return {'messages':load_jobs(),'message_queue':{'ready':True}}
     except QueueError as error:return {'messages':[],'message_queue':{'ready':False,'detail':str(error)}}
 
+def staff_requests():
+    records=[]
+    for path in sorted((PATH.parent/'staff-requests').glob('*.json'))[-100:]:
+        try:
+            record=read(path,{})
+            if isinstance(record,dict) and record.get('event_id')==path.stem:records.append(record)
+        except (OSError,ValueError):continue
+    return records
+
+def source_request(event_id,row):
+    if not isinstance(event_id,str) or not re.fullmatch(r'[a-f0-9]{24}',event_id):raise ValueError('Invalid staff request reference')
+    record=read(PATH.parent/'staff-requests'/f'{event_id}.json',{})
+    if record.get('status')!='needs_approval' or record.get('event_id')!=event_id or record.get('listing_id')!=row['id'] or record.get('listing_url')!=row['url'] or record.get('listing_title')!=row['title']:
+        raise ValueError('Staff request is unbound or listing changed; review the current request and listing again')
+    return record
+
 def preflight(platforms):
     unsupported=sorted(set(platforms)-SUPPORTED)
     if unsupported:return {'ready':False,'detail':'Not sent. Automatic messaging is not connected for '+', '.join(unsupported)+'. Remove those ads from the batch.'}
@@ -78,6 +95,7 @@ def enqueue(messages,lookup):
         text=str(entry.get('text','')).strip()
         if not text or len(text)>2000:raise ValueError('Messages must contain 1–2000 characters')
         review=approve(entry,row)
+        if entry.get('staff_event'):review['staff_request']=source_request(entry['staff_event'],row)
         review.update(confirmed=True,approved_at=now(),approved_text=text,listing_id=row['id'],listing_url=row['url'])
         key=hashlib.sha256((row['url']+'\n'+text).encode()).hexdigest()[:24]
         additions.append({'id':key,'listing_id':row['id'],'url':row['url'],'platform':row['platform'],'title':row['title'],'text':text,'review':review,'status':'queued','updated_at':now()})
@@ -153,6 +171,10 @@ def validate_job_review(job):
     if not review.get('approved_at') or review.get('approved_text')!=job.get('text') or review.get('listing_url')!=job.get('url') or review.get('listing_id')!=job.get('listing_id'):
         raise ValueError('Missing or changed approval; review this listing and exact message again')
     approve({'review':review,'url':job['url'],'title':job['title']},job)
+    if review.get('staff_request'):
+        request=review['staff_request']
+        current=source_request(request.get('event_id'),dict(job,id=job['listing_id']))
+        if request!=current:raise ValueError('Staff request changed; review the exact source request again')
 
 def process_pending():
     # Holding the OS lock across the entire send prevents a second process

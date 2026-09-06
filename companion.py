@@ -58,8 +58,8 @@ class Handler(BaseHTTPRequestHandler):
         path=up.urlparse(self.path).path
         if path=='/local/status':
             from alert_delivery import health
-            from message_queue import snapshot
-            return self.respond({'alerts':health(RUNTIME),'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),**snapshot()})
+            from message_queue import snapshot,staff_requests
+            return self.respond({'alerts':health(RUNTIME),'local':True,'model':'qwen3.5:latest','watches':read(RUNTIME/'watches.json',[]),'staff_requests':staff_requests(),**snapshot()})
         if path=='/local/photos':
             try:
                 row=listing(up.parse_qs(up.urlparse(self.path).query).get('id',[''])[0])

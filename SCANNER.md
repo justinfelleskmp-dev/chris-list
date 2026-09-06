@@ -64,3 +64,6 @@ Discoveries are journaled before outbox/config parsing and before acquiring the 
 A failed Git update no longer prevents the installed scanner from running. An unexpected source error is isolated so the remaining source results can still produce alerts. Git publishing can still fail independently of local delivery and reports failure in the schedule log.
 
 **Open private app to review & send** transfers selected drafts to the Mac-hosted app; it works from a phone connected to Tailscale while the Mac is awake. Opening that link does not send seller messages.
+
+### Staff requests and listing references
+Alerts include a stable CL reference derived from the exact listing URL. The existing operations-intake responder can resolve an explicit reference/link against the installed current feed, without a model, and save the original staff request under private `.scanner/staff-requests`. Vague seller-action messages are preserved for clarification. This is not seller-send approval. The private app's Staff listing requests panel opens the matched listing with a blank draft, records fresh requirements/offer approval, and carries the immutable source event into the message job. A changed or mismatched listing/request blocks submission. No second iMessage responder is started.

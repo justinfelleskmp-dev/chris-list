@@ -125,4 +125,19 @@ class QueueReliabilityTests(unittest.TestCase):
             script=page.evaluate.call_args.args[0]
             self.assertIn('fields[0].value!==',script)
 
+    def test_staff_request_provenance_cannot_move_to_another_listing(self):
+        import json
+        event='a'*24
+        folder=q.PATH.parent/'staff-requests';folder.mkdir()
+        record=dict(event_id=event,status='needs_approval',listing_id=ROW['id'],listing_url=ROW['url'],listing_title=ROW['title'],exact_staff_text='Offer $40 for this listing',send_authorized=False)
+        (folder/f'{event}.json').write_text(json.dumps(record))
+        entry=approved_message(ROW,'Would you accept $40?');entry['staff_event']=event
+        job=q.enqueue([entry],lambda _:ROW)['messages'][0]
+        self.assertEqual(job['review']['staff_request'],record)
+        q.validate_job_review(job)
+        record['listing_id']='different'
+        (folder/f'{event}.json').write_text(json.dumps(record))
+        with self.assertRaises(ValueError):q.enqueue([entry],lambda _:ROW)
+        with self.assertRaises(ValueError):q.validate_job_review(job)
+
 if __name__=='__main__':unittest.main()

@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 import uuid
 from email.message import EmailMessage
+from listing_reference import reference
 
 DASHBOARD = 'https://justinfelleskmp-dev.github.io/chris-list/'
 CHANNELS = ('email', 'text')
@@ -54,12 +55,13 @@ def digest(rows, channel):
     heading = 'Chris List: alert reliability test' if rows and all(r.get('is_test') is True for r in rows) else f'Chris List: {len(rows)} new matches'
     lines = [heading, DASHBOARD]
     for row in rows[:limit]:
-        lines.append(clean(row.get('title'), 140 if channel == 'email' else 70) + ' — ' + clean(row.get('price'), 30))
+        lines.append(reference(row)+' '+clean(row.get('title'), 140 if channel == 'email' else 70) + ' — ' + clean(row.get('price'), 30))
         if channel == 'email':
             url = str(row.get('url', ''))
             if url.startswith(('http://', 'https://')) and len(url) <= 500:
                 lines.append(clean(url, 500))
     if len(rows) > limit: lines.append(f'+ {len(rows)-limit} more on the dashboard')
+    lines.append('Include the CL reference or listing link when requesting an offer. Requests still need exact-message review before sending.')
     return '\n'.join(lines)
 
 

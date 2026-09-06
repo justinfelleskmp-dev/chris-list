@@ -13,6 +13,14 @@ import alert_delivery
 
 
 class AlertDeliveryTests(unittest.TestCase):
+    def test_alert_channels_share_exact_listing_reference(self):
+        from listing_reference import reference
+        row=self.row('a')
+        for channel in ('email','text'):
+            body=alert_delivery.digest([row],channel)
+            self.assertIn(reference(row),body)
+            self.assertIn('exact-message review',body)
+
     def setUp(self):
         self._env = patch.dict(os.environ, {}, clear=True)
         self._env.start()
