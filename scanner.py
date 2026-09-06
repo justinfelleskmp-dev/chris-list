@@ -11,15 +11,12 @@ import hashlib
 import html
 from html.parser import HTMLParser
 import json
-import os
 from pathlib import Path
 import re
-import smtplib
 import subprocess
 import time
 import urllib.parse as up
 import urllib.request as ur
-from email.message import EmailMessage
 
 from machine_rules import eligible, annotate
 
@@ -212,28 +209,8 @@ def merge(previous, discovered):
 
 
 def notify(new, results):
-    # Persist a retryable outbox: failed email never marks an item delivered.
-    pending = read(RUNTIME/'pending.json', {})
-    pending = {k:x for k,x in pending.items() if relevant(x)}
-    for x in new: pending[x['id']] = x
-    atomic(RUNTIME/'pending.json', pending)
-    if not pending: return 'No new items; no alert sent'
-    text = 'Chris List — new matches\nhttps://justinfelleskmp-dev.github.io/chris-list/\n\n'
-    text += '\n\n'.join(x['title']+' — '+x['price']+'\n'+x['url'] for x in pending.values())
-    RUNTIME.mkdir(exist_ok=True)
-    (RUNTIME/'latest-alert.txt').write_text(text)
-    msg = EmailMessage(); msg['Subject'] = f'Chris List: {len(pending)} new matches'; msg.set_content(text)
-    (RUNTIME/'latest-alert.eml').write_bytes(msg.as_bytes())
-    if not all(os.getenv(k) for k in ['CHRIS_SMTP_HOST','CHRIS_MAIL_FROM','CHRIS_MAIL_TO']):
-        return f'{len(pending)} new matches queued; email sender/recipient not configured'
-    try:
-        msg['From'] = os.environ['CHRIS_MAIL_FROM']; msg['To'] = os.environ['CHRIS_MAIL_TO']
-        with smtplib.SMTP(os.environ['CHRIS_SMTP_HOST'], int(os.getenv('CHRIS_SMTP_PORT', '587')), timeout=30) as smtp:
-            smtp.starttls()
-            if os.getenv('CHRIS_SMTP_USER'): smtp.login(os.environ['CHRIS_SMTP_USER'], os.environ['CHRIS_SMTP_PASSWORD'])
-            smtp.send_message(msg)
-        atomic(RUNTIME/'pending.json', {}); return 'Email delivered to configured server'
-    except Exception as error: return 'Email failed; queued for retry: '+str(error)
+    from alert_delivery import notify as deliver_alerts
+    return deliver_alerts(RUNTIME, new, relevant)
 
 
 def main():

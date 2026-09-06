@@ -8,7 +8,20 @@ From your phone, use **Scan now** → GitHub **Run workflow**. This runs the sam
 
 All ten sources are attempted. A source stops on a blocked/login/unparseable page and reports how many queries it completed. Public pages that do work are parsed automatically; this does not bypass account gates. At most 30 matching visible records per query are collected. Search pages may be regional defaults; location/delivery that cannot be verified are labeled unverified. The other 70 donor searches are lower priority. Configure queries in scanner-config.json. For a new description on your phone, choose **Add description to automatic scans** and submit the GitHub search request. The scanner reads requests authored by the repository owner; close the request to stop scanning it. This is separate from device-local watches. The first 100 open repository issues are checked each run; the scanner reports API intake failures.
 
-Alert delivery uses SMTP with STARTTLS. Configure CHRIS_SMTP_HOST, CHRIS_SMTP_USER, CHRIS_SMTP_PASSWORD, CHRIS_MAIL_FROM and CHRIS_MAIL_TO in the environment for local runs, or repository Secrets for manual GitHub runs. No credentials go in this repository. Until configured, new-item digests are written as .scanner/latest-alert.txt and .eml. Failed local email stays queued for retry; local repeated scans do not repeat already delivered new-item alerts. The GitHub manual runner has ephemeral storage and does not retain failed outboxes between runs.
+Automatic local alerts use the Mac's Mail and Messages apps through `alert_delivery.py`, with no model or paid API. Private settings live in `.scanner/alert-config.json` (never commit recipients or account settings). Email and text have separate persistent submission receipts, so a failed channel can retry without repeating the successful channel. Existing `pending.json` items migrate into the new outbox. Each scan sends at most one digest per enabled channel: up to ten email highlights or two text highlights, primary matches first, with a total count and dashboard link.
+
+Private configuration example (replace placeholders on the Mac):
+
+```json
+{
+  "email": {"enabled": true, "transport": "mail", "sender": "SENDER", "recipient": "RECIPIENT"},
+  "text": {"enabled": true, "recipient": "PHONE", "service_id": "MESSAGES_SERVICE_ID"}
+}
+```
+
+A missing channel waits for configuration. Setting `enabled` to `false` permanently skips its pending items and items discovered while disabled; reenabling starts with future items. Previously submitted records stay deduplicated. `.scanner/alert-outbox.json` contains per-item channel receipts and batch IDs. Records marked `held` require checking Mail/Messages (or the recipient) before an operator changes that channel to `submitted` or, only when known unsent, `pending`. Never automatically replay a held batch.
+
+A successful adapter call means the app or SMTP server accepted the message, not that it reached the recipient. An interrupted or timed-out submission is held for review to avoid automatic duplicates. The Mac must be awake, signed into its messaging accounts, and allow the scheduled process to control Mail/Messages. Private failures and receipts remain under `.scanner/`; public scan status contains no recipients or raw delivery errors. Legacy SMTP environment settings remain supported. GitHub runs cannot use this Mac's apps and have ephemeral outboxes; automatic device alerts run locally.
 
 The public snapshot includes discovered listings, search phrases and scan status. Your personal offers, negotiation timeline, email credentials and recipient remain outside the public snapshot. Use the browser's board backup to move private device-local data between devices.
 
@@ -32,4 +45,8 @@ Ad popups show all collected gallery images. The local app retrieves ad photos o
 ### Messaging repair
 The failed six-ad batch was all OfferUp and was recorded as manual_send_required; no messages were sent. OfferUp now has an adapter for its documented Ask / New Message / Send website flow. This adapter has not been validated against a signed-in account: Chrome Apple Events remains disabled on this installation. Preflight now rejects blocked Chrome connections and unsupported platforms before queueing. The modal polls delivery for the submitted batch and displays plain-language failures. Re-submitting a previously blocked OfferUp draft is allowed, but sent/uncertain messages are not replayed. Chrome and OfferUp sign-in must be connected before live delivery can be verified.
 
-Email selected ad links now uses only checked records, with a recipient and editable preview. It clearly opens an external email draft (not a seller message). Oversized mailto links are prevented, with an .eml download fallback. No SMTP email sender has been connected.
+Email selected ad links now uses only checked records, with a recipient and editable preview. It clearly opens an external email draft (not a seller message). Oversized mailto links are prevented, with an .eml download fallback. This manual draft action is separate from the automatic local Mail/Messages alert service.
+
+
+### Connection checks
+The Mac app distinguishes a closed Chrome window from a disabled Chrome Apple Events setting or a denied macOS Automation permission. These checks concern seller messaging; viewing listings and automatic Mail/Messages alerts use separate paths. A connection check does not prove a marketplace is signed in or a seller received anything.
