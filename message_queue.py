@@ -91,11 +91,13 @@ def enqueue(messages,lookup):
                 if old['status'] in ['needs_login','needs_connection','failed','manual_send_required','needs_review']:old.update(status=x['status'],detail='',review=x['review'],updated_at=now())
         atomic(PATH,jobs)
     return {'messages':[x for x in jobs if x['id'] in {a['id'] for a in additions}]}
-def update(key,status,detail=''):
+def update(key,status,detail='',receipt=None):
     with queue_lock():
         jobs=load_jobs()
         for x in jobs:
-            if x['id']==key:x.update(status=status,detail=detail,updated_at=now())
+            if x['id']==key:
+                x.update(status=status,detail=detail,updated_at=now())
+                if receipt is not None:x['receipt']=receipt
         atomic(PATH,jobs)
 
 def reconcile(data):

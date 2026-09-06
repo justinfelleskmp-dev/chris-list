@@ -14,7 +14,7 @@ class OfferUpSenderTests(unittest.TestCase):
         page = MagicMock()
         page.evaluate.side_effect = ['opened', 'false', 'filled', '1', click_result, confirmed]
         updates = []
-        with patch.object(offerup_sender, 'ChromeTab') as chrome, patch.object(offerup_sender.time, 'sleep'):
+        with patch.object(offerup_sender, 'ChromeTab') as chrome, patch.object(offerup_sender.time, 'sleep'), patch('offerup_receipt.check',return_value=None):
             chrome.return_value.__enter__.return_value = page
             offerup_sender.send({'id': 'job', 'url': 'https://offerup.com/item/detail/test', 'text': 'Approved text'},
                                 lambda *args: updates.append(args))
