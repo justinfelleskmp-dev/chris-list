@@ -19,6 +19,7 @@ async function syncScan(){
 const beforeScanRender=render;
 render=function(){
  beforeScanRender();
+ renderSourceFilters();
  const bar=document.querySelector('.bar');
  const info=Array.from(bar.querySelectorAll('p')).find(x=>x.textContent.includes('Automatic collection'));
  if(info)info.textContent=(navigator.onLine?'Online':'Offline')+' · Token-free scanner; saved results are search-page snapshots.';
@@ -31,7 +32,7 @@ render=function(){
  const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Source status & alerts';details.append(summary);
  const feed=state.last_scan||{};for(const source of feed.platforms||[]){const line=document.createElement('p');line.textContent=source.platform+': '+source.status+' · '+source.attempted_queries+'/'+source.total_queries+' queries · '+source.records+' records. '+source.detail;details.append(line);}
  const alert=document.createElement('p');alert.textContent=(feed.alert_status||'No completed scan.')+' '+(feed.intake_status||'');details.append(alert);bar.append(details);
-  const rows=state.listings.filter(x=>x.status!=='passed');const ordered=[...rows.filter(x=>x.priority!=='secondary'),...rows.filter(x=>x.priority==='secondary')];
+  const rows=visibleListings();const ordered=[...rows.filter(x=>x.priority!=='secondary'),...rows.filter(x=>x.priority==='secondary')];
  document.querySelectorAll('.cards article').forEach((card,i)=>{const x=ordered[i];if(!x?.last_seen)return;const meta=document.createElement('p');meta.className='small';meta.textContent='Seen '+new Date(x.last_seen).toLocaleString()+' · '+x.delivery+' · '+x.availability;card.append(meta);});
 };
 setTimeout(syncScan,0);

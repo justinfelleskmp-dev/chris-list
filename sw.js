@@ -1,4 +1,4 @@
-const CACHE='chris-list-9';
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./app.js?v=20260907','./style.css?v=20260907','./sections.css?v=20260907','./offline.js?v=20260907','./fixes.js?v=20260907','./donors.js?v=20260907','./scan-ui.js?v=20260907','./machine-rules.js?v=20260907','./workspace-ui.js?v=20260907'])));self.skipWaiting();});
+const CACHE='chris-list-10';
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./app.js?v=20260907-sources','./style.css?v=20260907-sources','./sections.css?v=20260907-sources','./offline.js?v=20260907-sources','./fixes.js?v=20260907-sources','./donors.js?v=20260907-sources','./scan-ui.js?v=20260907-sources','./machine-rules.js?v=20260907-sources','./workspace-ui.js?v=20260907-sources'])));self.skipWaiting();});
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',e=>{if(e.request.method==='GET'&&!new URL(e.request.url).pathname.startsWith('/local/')&&new URL(e.request.url).origin===self.location.origin)e.respondWith(fetch(e.request).then(r=>{if(r.ok){let copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));}return r;}).catch(()=>caches.match(e.request)));});

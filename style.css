@@ -8,3 +8,5 @@
 #delivery-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .results-link{display:block;font-weight:bold;padding:12px 0}#results{scroll-margin-top:12px}@media(max-width:720px){.grid>#results{grid-row:1}.grid>aside{grid-row:2}}
+
+.source-filters{border:1px solid #ccc;border-radius:6px;margin:0 0 20px;padding:12px;background:#fafafa;min-width:0}.source-filters legend{font-weight:bold;padding:0 6px}.source-choices{display:flex;flex-wrap:wrap;gap:8px}.source-choices label{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid #ccc;border-radius:5px;background:white;cursor:pointer}.source-choices label:has(input:checked){border-color:#551a8b;background:#f2ebfa}.source-choices input[type=checkbox]{width:auto;margin:0;accent-color:#551a8b}.source-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}.source-actions button{min-height:40px}.source-actions span{font-size:14px}.source-filters p{margin-bottom:0}
