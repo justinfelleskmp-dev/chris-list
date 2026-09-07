@@ -53,13 +53,12 @@ def digest(rows, channel):
     rows = sorted(rows, key=lambda r: (r.get('priority') == 'secondary', str(r.get('id'))))
     limit = 10 if channel == 'email' else 2
     heading = 'Chris List: alert reliability test' if rows and all(r.get('is_test') is True for r in rows) else f'Chris List: {len(rows)} new matches'
-    lines = [heading, DASHBOARD]
+    lines = [heading, DASHBOARD+'#results']
     for row in rows[:limit]:
         lines.append(reference(row)+' '+clean(row.get('title'), 140 if channel == 'email' else 70) + ' — ' + clean(row.get('price'), 30))
-        if channel == 'email':
-            url = str(row.get('url', ''))
-            if url.startswith(('http://', 'https://')) and len(url) <= 500:
-                lines.append(clean(url, 500))
+        url = str(row.get('url', ''))
+        if url.startswith(('http://', 'https://')) and len(url) <= 500:
+            lines.append(clean(url, 500))
     if len(rows) > limit: lines.append(f'+ {len(rows)-limit} more on the dashboard')
     lines.append('Include the CL reference or listing link when requesting an offer. Requests still need exact-message review before sending.')
     return '\n'.join(lines)

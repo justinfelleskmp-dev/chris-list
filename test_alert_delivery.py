@@ -19,6 +19,8 @@ class AlertDeliveryTests(unittest.TestCase):
         for channel in ('email','text'):
             body=alert_delivery.digest([row],channel)
             self.assertIn(reference(row),body)
+            self.assertIn(row['url'],body)
+            self.assertIn('#results',body)
             self.assertIn('exact-message review',body)
 
     def setUp(self):

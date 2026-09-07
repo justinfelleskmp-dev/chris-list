@@ -6,3 +6,5 @@
 
 #delivery-review label { display: block; margin: 10px 0; }
 #delivery-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.results-link{display:block;font-weight:bold;padding:12px 0}#results{scroll-margin-top:12px}@media(max-width:720px){.grid>#results{grid-row:1}.grid>aside{grid-row:2}}

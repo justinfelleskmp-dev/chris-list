@@ -10,10 +10,11 @@ async function syncScan(){
   const unseen=feed.listings.filter(x=>machineFit(x).eligible&&!records.has(x.id));
   for(const row of feed.listings){const old=records.get(row.id)||{};records.set(row.id,{...old,...row,status:old.status||'saved',first_offer:old.first_offer||'',final_offer:old.final_offer||'',timeline:old.timeline||''});}
   board.listings=Array.from(records.values());filterMachines(board);const {listings,...metadata}=feed;board.last_scan=metadata;localStorage.setItem(key,JSON.stringify(board));await load();
+  if(location.hash==='#results')document.querySelector('#results')?.scrollIntoView();
   if(unseen.length&&localStorage.getItem('chris-alerts')==='on'&&'Notification' in window&&Notification.permission==='granted'){
    const registration=await navigator.serviceWorker.ready;await registration.showNotification('Chris List: '+unseen.length+' new matches',{body:unseen.slice(0,3).map(x=>x.title).join(' · '),tag:'chris-list-new'});
   }
- }catch(error){console.info('Showing saved snapshot:',error.message);}
+ }catch(error){console.info('Showing saved snapshot:',error.message);let notice=document.querySelector('#scan-error');if(!notice){notice=document.createElement('p');notice.id='scan-error';notice.setAttribute('role','status');document.querySelector('.bar')?.append(notice);}notice.textContent='Could not load current matches. Showing saved items only. Use the direct listing links in your alert, or tap Refresh scan results to retry.';}
 }
 const beforeScanRender=render;
 render=function(){
