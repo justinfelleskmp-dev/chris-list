@@ -46,16 +46,35 @@ def listing(key):
     return row
 
 class Handler(BaseHTTPRequestHandler):
+    def site_origin(self):
+        # Only the configured shared site may read/call this tailnet service.
+        try:origin=read(RUNTIME/'site-bridge.json',{}).get('origin')
+        except (OSError,ValueError):return None
+        return origin if isinstance(origin,str) and origin.startswith('https://') and self.headers.get('Origin')==origin else None
+    def end_headers(self):
+        origin=self.site_origin()
+        if origin:
+            self.send_header('Access-Control-Allow-Origin',origin)
+            self.send_header('Vary','Origin')
+            self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers','Content-Type, X-Chris-List')
+            self.send_header('Access-Control-Allow-Private-Network','true')
+        super().end_headers()
     def respond(self,value,status=200):
         body=json.dumps(value).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
     def trusted(self):
         host=self.headers.get('Host','').split(':')[0].lower()
         allowed={'localhost','127.0.0.1','192.168.68.68','100.79.212.46','kms-mac-mini.local','kms-mac-mini-1.tail016811.ts.net'}
         origin=self.headers.get('Origin')
-        return host in allowed and (not origin or up.urlparse(origin).netloc==self.headers.get('Host'))
+        return host in allowed and (not origin or up.urlparse(origin).netloc==self.headers.get('Host') or bool(self.site_origin()))
+    def do_OPTIONS(self):
+        if not self.trusted() or not self.site_origin():return self.respond({'error':'Unrecognized site origin'},403)
+        return self.respond({'ok':True})
     def do_GET(self):
         if not self.trusted(): return self.respond({'error':'Unrecognized host or origin'},403)
         path=up.urlparse(self.path).path
+        if path=='/local/feed':
+            return self.respond(read(ROOT/'scan-results.json',{'listings':[]}))
         if path=='/local/status':
             from alert_delivery import health
             from message_queue import snapshot,staff_requests
