@@ -1,4 +1,4 @@
-const sectionStyle=document.createElement('link');sectionStyle.rel='stylesheet';sectionStyle.href='sections.css';document.head.append(sectionStyle);
+const sectionStyle=document.createElement('link');sectionStyle.rel='stylesheet';sectionStyle.href='sections.css?v=20260907';document.head.append(sectionStyle);
 const originalRender=render,originalOpen=openItem,selected=new Set();
 render=function(){
  originalRender();document.querySelector('.mark').textContent='chris list';
